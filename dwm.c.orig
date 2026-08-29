@@ -310,6 +310,8 @@ static int sw, sh;           /* X display screen geometry width, height */
 static int bh;               /* bar height */
 static int th = 0;           /* tab bar geometry */// tab
 static int lrpad;            /* sum of left and right padding for text */
+static int vp;               /* vertical padding for bar */
+static int sp;               /* side padding for bar */
 static int (*xerrorxlib)(Display *, XErrorEvent *);
 static unsigned int numlockmask = 0;
 static void (*handler[LASTEvent]) (XEvent *) = {
@@ -480,7 +482,7 @@ void
 arrangemon(Monitor *m)
 {
 	updatebarpos(selmon);//tab
-	XMoveResizeWindow(dpy, selmon->tabwin, selmon->wx, selmon->ty, selmon->ww, th);//tab
+	XMoveResizeWindow(dpy, selmon->tabwin, selmon->wx + sp, selmon->ty, selmon->ww - 2 * sp, th);//tab
 	strncpy(m->ltsymbol, m->lt[m->sellt]->symbol, sizeof m->ltsymbol);
 	if (m->lt[m->sellt]->arrange)
 		m->lt[m->sellt]->arrange(m);
@@ -693,7 +695,7 @@ configurenotify(XEvent *e)
 				for (c = m->clients; c; c = c->next)
 					if (c->isfullscreen)
 						resizeclient(c, m->mx, m->my, m->mw, m->mh);
-				XMoveResizeWindow(dpy, m->barwin, m->wx, m->by, m->ww, bh);
+				XMoveResizeWindow(dpy, m->barwin, m->wx + sp, m->by + vp, m->ww -  2 * sp, bh);
 			}
 			focus(NULL);
 			arrange(NULL);
@@ -864,7 +866,7 @@ drawbar(Monitor *m)
 	if (m == selmon) { /* status is only drawn on selected monitor */
 		drw_setscheme(drw, scheme[SchemeNorm]);
 		tw = TEXTW(stext) - lrpad + 2; /* 2px right padding */
-		drw_text(drw, m->ww - tw, 0, tw, bh, 0, stext, 0);
+		drw_text(drw, m->ww - sw - 2 * sp, 0, sw, bh, 0, stext, 0);
 	}
 
 	for (c = m->clients; c; c = c->next) {
@@ -889,7 +891,7 @@ drawbar(Monitor *m)
 
 	if ((w = m->ww - tw - x) > bh) {
 			drw_setscheme(drw, scheme[SchemeNorm]);
-			drw_rect(drw, x, 0, w, bh, 1, 1);
+			drw_rect(drw, x, 0, w - 2 * sp, bh, 1, 1);
 	}
 	drw_map(drw, m->barwin, 0, 0, m->ww, bh);
 }
@@ -964,18 +966,18 @@ drawtab(Monitor *m) {
 	  if(m->ntabs >= MAXTABS) break;
 	}
 
-	if(tot_width > m->ww){ //not enough space to display the labels, they need to be truncated
+	if(tot_width > m->ww - 2 * sp){ //not enough space to display the labels, they need to be truncated
 	  memcpy(sorted_label_widths, m->tab_widths, sizeof(int) * m->ntabs);
 	  qsort(sorted_label_widths, m->ntabs, sizeof(int), cmpint);
 	  tot_width = view_info_w;
 	  for(i = 0; i < m->ntabs; ++i){
-	    if(tot_width + (m->ntabs - i) * sorted_label_widths[i] > m->ww)
+	    if(tot_width + (m->ntabs - i) * sorted_label_widths[i] > m->ww - 2 * sp)
 	      break;
 	    tot_width += sorted_label_widths[i];
 	  }
-	  maxsize = (m->ww - tot_width) / (m->ntabs - i);
+	  maxsize = (m->ww - 2 * sp - tot_width) / (m->ntabs - i);
 	} else{
-	  maxsize = m->ww;
+	  maxsize = m->ww - 2 * sp;
 	}
 	i = 0;
 	for(c = m->clients; c; c = c->next){
@@ -992,7 +994,7 @@ drawtab(Monitor *m) {
 	drw_setscheme(drw, scheme[SchemeNorm]);
 
 	/* cleans interspace between window names and current viewed tag label */
-	w = m->ww - view_info_w - x;
+	w = m->ww - 2 * sp - view_info_w - x;
 	drw_text(drw, x, 0, w, th, 0, "", 0);
 
 	/* view info */
@@ -1000,7 +1002,7 @@ drawtab(Monitor *m) {
 	w = view_info_w;
 	drw_text(drw, x, 0, w, th, 0, view_info, 0);
 
-	drw_map(drw, m->tabwin, 0, 0, m->ww, th);
+	drw_map(drw, m->tabwin, 0, 0, m->ww - 2 * sp, th);
 }
 
 void
@@ -2000,6 +2002,9 @@ setup(void)
 	bh = drw->fonts->h + 2;
 	th = bh;//tab
 	updategeom();
+	sp = sidepad;
+	vp = (topbar == 1) ? vertpad : - vertpad;
+
 	/* init atoms */
 	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
 	wmatom[WMProtocols] = XInternAtom(dpy, "WM_PROTOCOLS", False);
@@ -2033,6 +2038,7 @@ setup(void)
 	/* init bars */
 	updatebars();
 	updatestatus();
+	updatebarpos(selmon);
 	/* supporting window for NetWMCheck */
 	wmcheckwin = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
 	XChangeProperty(dpy, wmcheckwin, netatom[NetWMCheck], XA_WINDOW, 32,
@@ -2191,7 +2197,7 @@ togglebar(const Arg *arg)
 {
 	selmon->showbar = selmon->pertag->showbars[selmon->pertag->curtag] = !selmon->showbar;
 	updatebarpos(selmon);
-	XMoveResizeWindow(dpy, selmon->barwin, selmon->wx, selmon->by, selmon->ww, bh);
+	XMoveResizeWindow(dpy, selmon->barwin, selmon->wx + sp, selmon->by + vp, selmon->ww - 2 * sp, bh);
 	arrange(selmon);
 }
 
@@ -2353,12 +2359,12 @@ updatebars(void)
 	for (m = mons; m; m = m->next) {
 		if (m->barwin)
 			continue;
-		m->barwin = XCreateWindow(dpy, root, m->wx, m->by, m->ww, bh, 0, DefaultDepth(dpy, screen),
+		m->barwin = XCreateWindow(dpy, root, m->wx + sp, m->by + vp, m->ww - 2 * sp, bh, 0, DefaultDepth(dpy, screen),
 				CopyFromParent, DefaultVisual(dpy, screen),
 				CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa);
 		XDefineCursor(dpy, m->barwin, cursor[CurNormal]->cursor);
 		XMapRaised(dpy, m->barwin);
-		m->tabwin = XCreateWindow(dpy, root, m->wx, m->ty, m->ww, th, 0, DefaultDepth(dpy, screen),
+		m->tabwin = XCreateWindow(dpy, root, m->wx + sp, m->ty, m->ww - 2 * sp, th, 0, DefaultDepth(dpy, screen),
 						CopyFromParent, DefaultVisual(dpy, screen),
 						CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa);
 		XDefineCursor(dpy, m->tabwin, cursor[CurNormal]->cursor);
@@ -2375,25 +2381,25 @@ updatebarpos(Monitor *m)
 	m->wy = m->my;
 	m->wh = m->mh;
 	if (m->showbar) {
-		m->wh -= bh;
-		m->by = m->topbar ? m->wy : m->wy + m->wh;
-		if ( m->topbar ) m->wy += bh;//tab
+		m->wh = m->wh - vertpad - bh;
+        m->by = m->topbar ? m->wy : m->wy + m->wh + vertpad;
+		if ( m->topbar ) m->wy = m->wy + bh + vp;//tab
 	} else {//tab
-		m->by = -bh;
+		m->by = -bh - vp;
 	}
 
 	for(c = m->clients; c; c = c->next) {//tab
 		if(ISVISIBLE(c)) ++nvis;//tab
 	}//tab
-//this check condition to show the tabbar coditions showtab_always and others.
-//	if(m->showtab == showtab_always || ((m->showtab == showtab_auto) && (nvis > 1) && (m->lt[m->sellt]->arrange == monocle))) 
- if((m->showtab==1 && alltab==1) || (m->showtab== 1 && ( nvis >1) && (m->lt[m->sellt]->arrange==monocle )) ){//tab
-		m->wh -= th;//tab
+    //this check condition to show the tabbar coditions showtab_always and others.
+    //	if(m->showtab == showtab_always || ((m->showtab == showtab_auto) && (nvis > 1) && (m->lt[m->sellt]->arrange == monocle))) 
+    if((m->showtab==1 && alltab==1) || (m->showtab== 1 && ( nvis >1) && (m->lt[m->sellt]->arrange==monocle )) ){//tab
+		m->wh = m->wh - th - vp;//tab
 		m->ty = m->toptab ? m->wy : m->wy + m->wh;//tab
 		if ( m->toptab )//tab
-			m->wy += th;//tab
+			m->wy = m->wy + th + vp;//tab
 	} else {//tab
-		m->ty = -th;//tab
+		m->ty = -th - vp;//tab
 	}//tab
 }
 
@@ -2969,3 +2975,4 @@ main(int argc, char *argv[])
 	XCloseDisplay(dpy);
 	return EXIT_SUCCESS;
 }
+
