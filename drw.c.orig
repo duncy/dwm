@@ -291,13 +291,6 @@ drw_text(Drw *drw, int x, int y, unsigned int w, unsigned int h, unsigned int lp
 		nextfont = NULL;
 		while (*text) {
 			utf8charlen = utf8decode(text, &utf8codepoint, &utf8err);
-
-			/* Skip control characters */
-			if (utf8codepoint < ' ') {
-				text++;
-				break;
-			}
-
 			for (curfont = drw->fonts; curfont; curfont = curfont->next) {
 				charexists = charexists || XftCharExists(drw->dpy, curfont->xfont, utf8codepoint);
 				if (charexists) {

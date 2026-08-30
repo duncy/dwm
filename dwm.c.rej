@@ -1,11 +1,37 @@
 --- dwm.c
 +++ dwm.c
-@@ -723,6 +723,8 @@ drawbar(Monitor *m)
- 		w = TEXTW(tags[i]);
- 		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1 << i ? SchemeSel : SchemeNorm]);
- 		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg & 1 << i);
-+		if (ulineall || m->tagset[m->seltags] & 1 << i) /* if there are conflicts, just move these lines directly underneath both 'drw_setscheme' and 'drw_text' :) */
-+			drw_rect(drw, x + ulinepad, bh - ulinestroke - ulinevoffset, (ulinepad * 2) > w ? 0 : w - (ulinepad * 2), ulinestroke, 1, 0);
- 		if (occ & 1 << i)
- 			drw_rect(drw, x + boxs, boxs, boxw, boxw,
- 				m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
+@@ -40,6 +40,7 @@
+ #include <X11/extensions/Xinerama.h>
+ #endif /* XINERAMA */
+ #include <X11/Xft/Xft.h>
++#include <Imlib2.h>
+ 
+ #include "drw.h"
+ #include "util.h"
+@@ -445,6 +453,11 @@ buttonpress(XEvent *e)
+ 		if (i < LENGTH(tags)) {
+ 			click = ClkTagBar;
+ 			arg.ui = 1 << i;
++			/* hide preview if we click the bar */
++			if (selmon->previewshow) {
++				selmon->previewshow = 0;
++				XUnmapWindow(dpy, selmon->tagwin);
++			}
+ 		} else if (ev->x < x + blw)
+ 			click = ClkLtSymbol;
+ 		else if (ev->x > selmon->ww - (int)TEXTW(stext))
+@@ -513,8 +527,14 @@ cleanupmon(Monitor *mon)
+ 		for (m = mons; m && m->next != mon; m = m->next);
+ 		m->next = mon->next;
+ 	}
++	for (i = 0; i < LENGTH(tags); i++)
++		if (mon->tagmap[i])
++			XFreePixmap(dpy, mon->tagmap[i]);
++	free(mon->tagmap);
+ 	XUnmapWindow(dpy, mon->barwin);
+ 	XDestroyWindow(dpy, mon->barwin);
++	XUnmapWindow(dpy, mon->tagwin);
++	XDestroyWindow(dpy, mon->tagwin);
+ 	free(mon);
+ }
+ 
