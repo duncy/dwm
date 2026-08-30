@@ -241,6 +241,7 @@ static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
+static void nametag(const Arg *arg);
 static Client *nexttagged(Client *c);
 static Client *nexttiled(Client *c);
 static void pop(Client *c);
@@ -1549,6 +1550,45 @@ movemouse(const Arg *arg)
 		selmon = m;
 		focus(NULL);
 	}
+}
+
+void
+nametag(const Arg *arg) {
+	char *p, name[MAX_TAGNAME_LEN];
+	FILE *f;
+	int i, j;
+
+    static char new_tags[IconsLast][NUMTAGS][MAX_TAGNAME_LEN] = {0};
+
+	errno = 0; // popen(3p) says on failure it "may" set errno
+	if(!(f = popen("dmenu < /dev/null", "r"))) {
+		fprintf(stderr, "dwm: popen 'dmenu < /dev/null' failed%s%s\n", errno ? ": " : "", errno ? strerror(errno) : "");
+		return;
+	}
+	if (!(p = fgets(name, MAX_TAGNAME_LEN, f)) && (i = errno) && ferror(f))
+		fprintf(stderr, "dwm: fgets failed: %s\n", strerror(i));
+	if (pclose(f) < 0)
+		fprintf(stderr, "dwm: pclose failed: %s\n", strerror(errno));
+	if(!p)
+		return;
+	if((p = strchr(name, '\n')))
+		*p = '\0';
+
+	for(i = 0; i < NUMTAGS; i++) {
+        if(selmon->tagset[selmon->seltags] & (1 << i)) {
+            for(j = 0; j < IconsLast; j++) {
+                if (tagicons[j][0] != NULL) { 
+                    snprintf(new_tags[j][i], MAX_TAGNAME_LEN, TAG_PREPEND "%s", i+1, name);
+                    tagicons[j][i] = new_tags[j][i];
+                }
+            }
+        }
+    }
+
+	drawbars();
+
+    if (selmon->showtab)
+        drawtab(selmon);
 }
 
 Client *

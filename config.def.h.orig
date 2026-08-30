@@ -31,7 +31,8 @@ static const char *colors[][3]      = {
 };
 
 /* tagging: refer to https://github.com/bakkeby/patches/wiki/tagicons */
-static const char *tags[NUMTAGS] = { NULL };  /* left for compatibility reasons, i.e. code that checks LENGTH(tags) */
+#define MAX_TAGNAME_LEN 14		/* excludes TAG_PREPEND */
+#define TAG_PREPEND "%1i:"		/* formatted as 2 chars */
 static char *tagicons[][NUMTAGS] = {
 	[IconsDefault]        = { "1", "2", "3", "4", "5", "6", "7", "8", "9" },
 	[IconsVacant]         = { NULL },
@@ -109,6 +110,7 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_period, tagmon,         {.i = +1 } },
 //	{ MODKEY|ShiftMask,             XK_a,      seticonset,     {.i = 0 } },
 //	{ MODKEY|ShiftMask,             XK_b,      seticonset,     {.i = 1 } },
+    { MODKEY,                       XK_n,      nametag,        {0} },
 	{ MODKEY,                       XK_minus,  setgaps,        {.i = -5 } },
 	{ MODKEY,                       XK_equal,  setgaps,        {.i = +5 } },
 	{ MODKEY|ShiftMask,             XK_minus,  setgaps,        {.i = GAP_RESET } },
