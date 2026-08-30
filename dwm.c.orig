@@ -51,6 +51,7 @@
 #include "util.h"
 
 /* macros */
+#define NUMTAGS                 9 /* the number of tags per monitor */
 #define BUTTONMASK              (ButtonPressMask|ButtonReleaseMask)
 #define CLEANMASK(mask)         (mask & ~(numlockmask|LockMask) & (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask))
 #define INTERSECT(x,y,w,h,m)    (MAX(0, MIN((x)+(w),(m)->wx+(m)->ww) - MAX((x),(m)->wx)) \
@@ -60,8 +61,7 @@
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
-#define TAGMASK                 ((1 << LENGTH(tags)) - 1)
-#define TAGSLENGTH              (LENGTH(tags))
+#define TAGMASK                 ((1 << NUMTAGS) - 1)
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 
@@ -85,6 +85,12 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkTagBar, ClkTabBar, ClkLtSymbol, ClkStatusText,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
+enum {
+	IconsDefault,
+	IconsVacant,
+	IconsOccupied,
+	IconsLast
+}; /* icon sets */
 
 typedef union {
 	int i;
@@ -160,6 +166,7 @@ struct Monitor {
 	int showtab;// tab
 	int topbar;
 	int toptab;// tab
+    int iconset;
 	Client *clients;
 	Client *sel;
 	Client *stack;
@@ -200,6 +207,7 @@ static void configure(Client *c);
 static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
 static Monitor *createmon(void);
+static void cycleiconset(const Arg *arg);
 static void destroynotify(XEvent *e);
 static void detach(Client *c);
 static void detachstack(Client *c);
@@ -218,6 +226,7 @@ static void focusstack(const Arg *arg);
 static void gap_copy(Gap *to, const Gap *from);
 static void focuswin(const Arg* arg);// tab
 static Atom getatomprop(Client *c, Atom prop);
+static char * geticon(Monitor *m, int tag, int iconset);
 static int getrootptr(int *x, int *y);
 static long getstate(Window w);
 static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
@@ -252,6 +261,7 @@ static void setcurrentdesktop(void);
 static void setdesktopnames(void);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
+static void seticonset(const Arg *arg);
 static void setgaps(const Arg *arg);
 static void setlayout(const Arg *arg);
 static void setmfact(const Arg *arg);
@@ -263,6 +273,7 @@ static void showhide(Client *c);
 static void spawn(const Arg *arg);
 static void toggletab(const Arg *arg);// tab
 static void tag(const Arg *arg);
+static char * tagicon(Monitor *m, int tag);
 static void tagmon(const Arg *arg);
 static void tile(Monitor *m);
 static void togglebar(const Arg *arg);
@@ -345,17 +356,17 @@ static xcb_connection_t *xcon;
 
 struct Pertag {
 	unsigned int curtag, prevtag; /* current and previous tag */
-	int nmasters[LENGTH(tags) + 1]; /* number of windows in master area */
-	float mfacts[LENGTH(tags) + 1]; /* mfacts per tag */
-	unsigned int sellts[LENGTH(tags) + 1]; /* selected layouts */
-	const Layout *ltidxs[LENGTH(tags) + 1][2]; /* matrix of tags and layouts indexes  */
-	int showbars[LENGTH(tags) + 1]; /* display bar for the current tag */
-    int showtabs[LENGTH(tags) + 1]; /* display tab for the current tag */
-	Client *sel[LENGTH(tags) + 1]; /* selected client */
+	int nmasters[NUMTAGS + 1]; /* number of windows in master area */
+	float mfacts[NUMTAGS + 1]; /* mfacts per tag */
+	unsigned int sellts[NUMTAGS + 1]; /* selected layouts */
+	const Layout *ltidxs[NUMTAGS + 1][2]; /* matrix of tags and layouts indexes  */
+	int showbars[NUMTAGS + 1]; /* display bar for the current tag */
+    int showtabs[NUMTAGS + 1]; /* display tab for the current tag */
+	Client *sel[NUMTAGS + 1]; /* selected client */
 };
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
-struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
+struct NumTags { char limitexceeded[NUMTAGS > 31 ? -1 : 1]; };
 
 /* function implementations */
 void
@@ -516,7 +527,7 @@ attachstack(Client *c)
 void
 buttonpress(XEvent *e)
 {
-	unsigned int i, x, click;
+	unsigned int i, x, tw, click;
 	Arg arg = {0};
 	Client *c;
 	Monitor *m;
@@ -531,10 +542,13 @@ buttonpress(XEvent *e)
 	}
 	if (ev->window == selmon->barwin) {
 		i = x = 0;
-		do
-			x += TEXTW(tags[i]);
-		while (ev->x >= x && ++i < LENGTH(tags));
-		if (i < LENGTH(tags)) {
+		do {
+			tw = TEXTW(tagicon(selmon, i));
+			if (tw <= lrpad)
+				continue;
+			x += tw;
+		} while (ev->x >= x && ++i < NUMTAGS);
+		if (i < NUMTAGS) {
 			click = ClkTagBar;
 			arg.ui = 1 << i;
 		} else if (ev->x < x + TEXTW(selmon->ltsymbol))
@@ -645,8 +659,8 @@ clientmessage(XEvent *e)
 			setfullscreen(c, (cme->data.l[0] == 1 /* _NET_WM_STATE_ADD    */
 				|| (cme->data.l[0] == 2 /* _NET_WM_STATE_TOGGLE */ && !c->isfullscreen)));
 	} else if (cme->message_type == netatom[NetActiveWindow]) {
-		for (i = 0; i < LENGTH(tags) && !((1 << i) & c->tags); i++);
-		if (i < LENGTH(tags)) {
+		for (i = 0; i < NUMTAGS && !((1 << i) & c->tags); i++);
+		if (i < NUMTAGS) {
 			const Arg a = {.ui = 1 << i};
 			selmon = c->mon;
 			view(&a);
@@ -785,7 +799,7 @@ createmon(void)
 	m->pertag = ecalloc(1, sizeof(Pertag));
 	m->pertag->curtag = m->pertag->prevtag = 1;
 
-	for (i = 0; i <= LENGTH(tags); i++) {
+	for (i = 0; i <= NUMTAGS; i++) {
 		m->pertag->nmasters[i] = m->nmaster;
 		m->pertag->mfacts[i] = m->mfact;
 
@@ -798,6 +812,24 @@ createmon(void)
 	}
 
 	return m;
+}
+
+void
+cycleiconset(const Arg *arg)
+{
+	Monitor *m = selmon;
+	if (arg->i == 0)
+		return;
+	if (arg->i > 0) {
+		for (++m->iconset; m->iconset < IconsLast && tagicons[m->iconset][0] == NULL; ++m->iconset);
+		if (m->iconset >= IconsLast)
+			m->iconset = 0;
+	} else if (arg->i < 0) {
+		for (--m->iconset; m->iconset > 0 && tagicons[m->iconset][0] == NULL; --m->iconset);
+		if (m->iconset < 0)
+			for (m->iconset = IconsLast - 1; m->iconset > 0 && tagicons[m->iconset][0] == NULL; --m->iconset);
+	}
+	drawbar(m);
 }
 
 void
@@ -857,6 +889,7 @@ drawbar(Monitor *m)
 	int boxs = drw->fonts->h / 9;
 	int boxw = drw->fonts->h / 6 + 2;
 	unsigned int i, occ = 0, urg = 0;
+	char *icon;
 	Client *c;
 
 	if (!m->showbar)
@@ -875,10 +908,13 @@ drawbar(Monitor *m)
 			urg |= c->tags;
 	}
 	x = 0;
-	for (i = 0; i < LENGTH(tags); i++) {
-		w = TEXTW(tags[i]);
+	for (i = 0; i < NUMTAGS; i++) {
+		icon = tagicon(m, i);
+		w = TEXTW(icon);
+		if (w <= lrpad)
+			continue;
 		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1 << i ? SchemeSel : SchemeNorm]);
-		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg & 1 << i);
+		drw_text(drw, x, 0, w, bh, lrpad / 2, icon, urg & 1 << i);
 		if (occ & 1 << i)
 			drw_rect(drw, x + boxs, boxs, boxw, boxw,
 				m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
@@ -937,7 +973,7 @@ drawtab(Monitor *m) {
 	int w = 0;
 
 	//view_info: indicate the tag which is displayed in the view
-	for(i = 0; i < LENGTH(tags); ++i){
+	for(i = 0; i < NUMTAGS; ++i){
 	  if((selmon->tagset[selmon->seltags] >> i) & 1) {
 	    if(itag >=0){ //more than one tag selected
 	      itag = -1;
@@ -947,8 +983,8 @@ drawtab(Monitor *m) {
 	  }
 	}
 
-	if(0 <= itag  && itag < LENGTH(tags)){
-	  snprintf(view_info, sizeof view_info, "[%s]", tags[itag]);
+	if(0 <= itag  && itag < NUMTAGS){
+	  snprintf(view_info, sizeof view_info, "[%s]", tagicon(m, itag));
 	} else {
 	  strncpy(view_info, "[...]", sizeof view_info);
 	}
@@ -1152,6 +1188,20 @@ getatomprop(Client *c, Atom prop)
 		XFree(p);
 	}
 	return atom;
+}
+
+char *
+geticon(Monitor *m, int tag, int iconset)
+{
+	int i;
+	int tagindex = tag + NUMTAGS * m->num;
+	for (i = 0; i < LENGTH(tagicons[iconset]) && tagicons[iconset][i] != NULL; ++i);
+	if (i == 0)
+		tagindex = 0;
+	else if (tagindex >= i)
+		tagindex = tagindex % i;
+
+	return tagicons[iconset][tagindex];
 }
 
 int
@@ -1839,9 +1889,13 @@ setcurrentdesktop(void){
 	XChangeProperty(dpy, root, netatom[NetCurrentDesktop], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 1);
 }
 void setdesktopnames(void){
+    int i;
 	XTextProperty text;
-	Xutf8TextListToTextProperty(dpy, (char **)tags, TAGSLENGTH, XUTF8StringStyle, &text);
-	XSetTextProperty(dpy, root, &text, netatom[NetDesktopNames]);
+    char *tags[NUMTAGS];
+    for (i = 0; i < NUMTAGS; i++)
+		tags[i] = tagicon(selmon, i);
+    Xutf8TextListToTextProperty(dpy, tags, NUMTAGS, XUTF8StringStyle, &text);
+    XSetTextProperty(dpy, root, &text, netatom[NetDesktopNames]);
 }
 
 int
@@ -1871,7 +1925,7 @@ sendevent(Client *c, Atom proto)
 
 void
 setnumdesktops(void){
-	long data[] = { TAGSLENGTH };
+	long data[] = { NUMTAGS };
 	XChangeProperty(dpy, root, netatom[NetNumberOfDesktops], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 1);
 }
 
@@ -1942,6 +1996,15 @@ setgaps(const Arg *arg)
 	p->realgap = MAX(p->realgap, 0);
 	p->gappx = p->realgap * p->isgap;
 	arrange(selmon);
+}
+
+void
+seticonset(const Arg *arg)
+{
+	if (arg->i >= 0 && arg->i < IconsLast) {
+		selmon->iconset = arg->i;
+		drawbar(selmon);
+	}
 }
 
 void
@@ -2156,6 +2219,24 @@ tag(const Arg *arg)
 	}
 }
 
+char *
+tagicon(Monitor *m, int tag)
+{
+	Client *c;
+	char *icon;
+	for (c = m->clients; c && (!(c->tags & 1 << tag)); c = c->next);
+	// for (c = m->clients; c && (!(c->tags & 1 << tag) || HIDDEN(c)); c = c->next); // awesomebar / wintitleactions compatibility
+	if (c && tagicons[IconsOccupied][0] != NULL)
+		icon = geticon(m, tag, IconsOccupied);
+	else {
+		icon = geticon(m, tag, m->iconset);
+		if (TEXTW(icon) <= lrpad && m->tagset[m->seltags] & 1 << tag)
+			icon = geticon(m, tag, IconsVacant);
+	}
+
+	return icon;
+}
+
 void
 tagmon(const Arg *arg)
 {
@@ -2308,7 +2389,7 @@ unmanage(Client *c, int destroyed)
 	if (s)
 		s->swallowing = NULL;
 
-	for (i = 0; i < LENGTH(tags) + 1; i++)
+	for (i = 0; i < NUMTAGS + 1; i++)
 		if (c->mon->pertag->sel[i] == c)
 			c->mon->pertag->sel[i] = NULL;
 
@@ -2417,7 +2498,7 @@ updateclientlist(void)
 			XChangeProperty(dpy, root, netatom[NetClientList],
 				XA_WINDOW, 32, PropModeAppend,
 				(unsigned char *) &(c->win), 1);
-			for (i = 0; i < LENGTH(tags); i++) {
+			for (i = 0; i < NUMTAGS; i++) {
 				if (c->tags & (1 << i)) {
 					deckindex = i;
 					break;

@@ -1,27 +1,10 @@
 --- dwm.c
 +++ dwm.c
-@@ -54,7 +55,7 @@
- #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
- #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
- #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
--#define TAGMASK                 ((1 << LENGTH(tags)) - 1)
-+#define TAGMASK                 ((1 << NUMTAGS) - 1)
- #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
- 
- /* enums */
-@@ -130,6 +137,7 @@ struct Monitor {
- 	unsigned int tagset[2];
- 	int showbar;
- 	int topbar;
-+	int iconset;
- 	Client *clients;
- 	Client *sel;
- 	Client *stack;
-@@ -208,6 +218,7 @@ static void sendmon(Client *c, Monitor *m);
- static void setclientstate(Client *c, long state);
- static void setfocus(Client *c);
- static void setfullscreen(Client *c, int fullscreen);
-+static void seticonset(const Arg *arg);
- static void setlayout(const Arg *arg);
- static void setmfact(const Arg *arg);
- static void setup(void);
+@@ -183,6 +183,7 @@
+ static void monocle(Monitor *m);
+ static void motionnotify(XEvent *e);
+ static void movemouse(const Arg *arg);
++static void nametag(const Arg *arg);
+ static Client *nexttiled(Client *c);
+ static void pop(Client *);
+ static void propertynotify(XEvent *e);
