@@ -339,7 +339,6 @@ static void view(const Arg *arg);
 static void window_set_state(Display *dpy, Window win, long state);
 static void window_map(Display *dpy, Client *c, int deiconify);
 static void window_unmap(Display *dpy, Window win, Window root, int iconify);
-static void warp(const Client *c);
 static Client *wintoclient(Window w);
 static Monitor *wintomon(Window w);
 static Client *wintosystrayicon(Window w);
@@ -397,6 +396,7 @@ static Atom wmatom[WMLast], netatom[NetLast], motifatom, xatom[XLast];
 static int running = 1;
 static Cur *cursor[CurLast];
 static Clr **scheme;
+static Clr **tagscheme;
 static Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon;
@@ -1044,14 +1044,14 @@ drawbar(Monitor *m)
 		w = TEXTW(icon);
 		if (w <= lrpad)
 			continue;
-		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1 << i ? SchemeSel : SchemeNorm]);
+		drw_setscheme(drw, (m->tagset[m->seltags] & 1 << i ? tagscheme[i] : scheme[SchemeNorm]));
 		drw_text(drw, x, 0, w, bh, lrpad / 2, icon, urg & 1 << i);
 		if (ulineall || m->tagset[m->seltags] & 1 << i) /* if there are conflicts, just move these lines directly underneath both 'drw_setscheme' and 'drw_text' :) */
 			drw_rect(drw, x + ulinepad, bh - ulinestroke - ulinevoffset, (ulinepad * 2) > w ? 0 : w - (ulinepad * 2), ulinestroke, 1, 0);
-		if (occ & 1 << i)
-			drw_rect(drw, x + boxs, boxs, boxw, boxw,
-				m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
-				urg & 1 << i);
+		// if (occ & 1 << i)
+		// 	drw_rect(drw, x + boxs, boxs, boxw, boxw,
+		// 		m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
+		// 		urg & 1 << i);
 		x += w;
 	}
 	w = TEXTW(m->ltsymbol);
@@ -1110,19 +1110,19 @@ drawtab(Monitor *m) {
 
 	//view_info: indicate the tag which is displayed in the view
 	for(i = 0; i < NUMTAGS; ++i){
-	  if((selmon->tagset[selmon->seltags] >> i) & 1) {
-	    if(itag >=0){ //more than one tag selected
-	      itag = -1;
-	      break;
-	    }
-	    itag = i;
-	  }
+        if((selmon->tagset[selmon->seltags] >> i) & 1) {
+            if(itag >=0){ //more than one tag selected
+            itag = -1;
+            break;
+            }
+            itag = i;
+        }
 	}
 
 	if(0 <= itag  && itag < NUMTAGS){
-	  snprintf(view_info, sizeof view_info, "[%s]", tagicon(m, itag));
+	    snprintf(view_info, sizeof view_info, "[%s]", tagicon(m, itag));
 	} else {
-	  strncpy(view_info, "[...]", sizeof view_info);
+	    strncpy(view_info, "[...]", sizeof view_info);
 	}
 	view_info[sizeof(view_info) - 1 ] = 0;
 	view_info_w = TEXTW(view_info);
@@ -1131,36 +1131,41 @@ drawtab(Monitor *m) {
 	/* Calculates number of labels and their width */
 	m->ntabs = 0;
 	for(c = m->clients; c; c = c->next){
-	  if(!ISVISIBLE(c)) continue;
-	  m->tab_widths[m->ntabs] = TEXTW(c->name);
-	  tot_width += m->tab_widths[m->ntabs];
-	  ++m->ntabs;
-	  if(m->ntabs >= MAXTABS) break;
+        if(!ISVISIBLE(c)) continue;
+        m->tab_widths[m->ntabs] = TEXTW(c->name);
+        tot_width += m->tab_widths[m->ntabs];
+        ++m->ntabs;
+        if(m->ntabs >= MAXTABS) break;
 	}
 
 	if(tot_width > m->ww - 2 * sp){ //not enough space to display the labels, they need to be truncated
-	  memcpy(sorted_label_widths, m->tab_widths, sizeof(int) * m->ntabs);
-	  qsort(sorted_label_widths, m->ntabs, sizeof(int), cmpint);
-	  tot_width = view_info_w;
-	  for(i = 0; i < m->ntabs; ++i){
-	    if(tot_width + (m->ntabs - i) * sorted_label_widths[i] > m->ww - 2 * sp)
-	      break;
-	    tot_width += sorted_label_widths[i];
-	  }
-	  maxsize = (m->ww - 2 * sp - tot_width) / (m->ntabs - i);
-	} else{
-	  maxsize = m->ww - 2 * sp;
-	}
+        memcpy(sorted_label_widths, m->tab_widths, sizeof(int) * m->ntabs);
+        qsort(sorted_label_widths, m->ntabs, sizeof(int), cmpint);
+        tot_width = view_info_w;
+        for(i = 0; i < m->ntabs; ++i){
+            if(tot_width + (m->ntabs - i) * sorted_label_widths[i] > m->ww - 2 * sp)
+            break;
+            tot_width += sorted_label_widths[i];
+        }
+        maxsize = (m->ww - 2 * sp - tot_width) / (m->ntabs - i);
+    } else{
+        maxsize = m->ww - 2 * sp;
+    }
 	i = 0;
 	for(c = m->clients; c; c = c->next){
-	  if(!ISVISIBLE(c)) continue;
-	  if(i >= m->ntabs) break;
-	  if(m->tab_widths[i] >  maxsize) m->tab_widths[i] = maxsize;
-	  w = m->tab_widths[i];
-	  drw_setscheme(drw, scheme[(c == m->sel) ? SchemeSel : SchemeNorm]);
-	  drw_text(drw, x, 0, w, th, 0, c->name, 0);
-	  x += w;
-	  ++i;
+        if(!ISVISIBLE(c)) continue;
+        if(i >= m->ntabs) break;
+        if(m->tab_widths[i] >  maxsize) m->tab_widths[i] = maxsize;
+        w = m->tab_widths[i];
+        drw_setscheme(drw, (c == m->sel ? tagscheme[i % NUMTAGS] : scheme[SchemeNorm]));
+        drw_text(drw, x, 0, w, th, lrpad / 2, c->name, 0);
+
+        if (ulineall || c == m->sel) {
+			drw_rect(drw, x + ulinepad, bh - ulinestroke - ulinevoffset, (ulinepad * 2) > w ? 0 : w - (ulinepad * 2), ulinestroke, 1, 0);
+        }
+
+        x += w;
+        ++i;
 	}
 
 	drw_setscheme(drw, scheme[SchemeNorm]);
@@ -1172,7 +1177,7 @@ drawtab(Monitor *m) {
 	/* view info */
 	x += w;
 	w = view_info_w;
-	drw_text(drw, x, 0, w, th, 0, view_info, 0);
+	drw_text(drw, x, 0, w, th, lrpad / 2, view_info, 0);
 
 	drw_map(drw, m->tabwin, 0, 0, m->ww - 2 * sp, th);
 }
@@ -1270,7 +1275,6 @@ focusmon(const Arg *arg)
 	unfocus(selmon->sel, 0);
 	selmon = m;
 	focus(NULL);
-	warp(selmon->sel);
 }
 
 void
@@ -2099,8 +2103,6 @@ restack(Monitor *m)
 				wc.sibling = c->win;
 			}
 	}
-	if (m == selmon && (m->tagset[m->seltags] & m->sel->tags) && m->lt[m->sellt]->arrange != &monocle)
-		warp(m->sel);
 	XSync(dpy, False);
 	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev))
     ;
@@ -2466,9 +2468,14 @@ setup(void)
 	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
 	cursor[CurMove] = drw_cur_create(drw, XC_fleur);
 	/* init appearance */
+	if (NUMTAGS > LENGTH(tagsel))
+		die("too few color schemes for the tags");
 	scheme = ecalloc(LENGTH(colors), sizeof(Clr *));
 	for (i = 0; i < LENGTH(colors); i++)
 		scheme[i] = drw_scm_create(drw, colors[i], alphas[i], 3);
+	tagscheme = ecalloc(LENGTH(tagsel), sizeof(Clr *));
+	for (i = 0; i < LENGTH(tagsel); i++)
+		tagscheme[i] = drw_scm_create(drw, tagsel[i], tagalpha, 2);
 	/* init system tray */
 	if (showsystray)
 		updatesystray(0);
@@ -2887,7 +2894,8 @@ updatebars(void)
 	XClassHint ch = {"dwm", "dwm"};
 	for (m = mons; m; m = m->next) {
 		if (!m->tagwin) {
-			m->tagwin = XCreateWindow(dpy, root, m->wx, m->by + bh, m->mw / scalepreview, m->mh / scalepreview, 0, depth, 
+            // Added sidepad and vertpad padding due to the offset caused by that patch.
+			m->tagwin = XCreateWindow(dpy, root, m->wx + sidepad, m->by + bh + vertpad, m->mw / scalepreview, m->mh / scalepreview, 0, depth, 
                                       InputOutput, visual, 
                                       CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWColormap|CWEventMask, &wa);
 			XDefineCursor(dpy, m->tagwin, cursor[CurNormal]->cursor);
@@ -3288,10 +3296,24 @@ updatesystrayiconstate(Client *i, XPropertyEvent *ev)
 void
 updatetitle(Client *c)
 {
-	if (!gettextprop(c->win, netatom[NetWMName], c->name, sizeof c->name))
-		gettextprop(c->win, XA_WM_NAME, c->name, sizeof c->name);
-	if (c->name[0] == '\0') /* hack to mark broken clients */
-		strcpy(c->name, broken);
+    char title[256];
+    XClassHint ch = { NULL, NULL };
+
+	if (!gettextprop(c->win, netatom[NetWMName], title, sizeof title))
+		gettextprop(c->win, XA_WM_NAME, title, sizeof title);
+	if (title[0] == '\0') /* hack to mark broken clients */
+		strcpy(title, broken);
+
+    if (XGetClassHint(dpy, c->win, &ch) && ch.res_class) {
+        snprintf(c->name, sizeof c->name, "%s: %s", ch.res_class, title);
+    } else {
+		strncpy(c->name, title, sizeof c->name);
+	}
+
+    if (ch.res_class)
+		XFree(ch.res_class);
+	if (ch.res_name)
+		XFree(ch.res_name);
 }
 
 void
@@ -3538,28 +3560,6 @@ swallowingclient(Window w)
 	}
 
 	return NULL;
-}
-
-void
-warp(const Client *c)
-{
-	int x, y;
-
-	if (!c) {
-		XWarpPointer(dpy, None, root, 0, 0, 0, 0, selmon->wx + selmon->ww / 2, selmon->wy + selmon->wh / 2);
-		return;
-	}
-
-	if (!getrootptr(&x, &y) ||
-		(x > c->x - c->bw &&
-		 y > c->y - c->bw &&
-		 x < c->x + c->w + c->bw*2 &&
-		 y < c->y + c->h + c->bw*2) ||
-		(y > c->mon->by && y < c->mon->by + bh) ||
-		(c->mon->topbar && !y))
-		return;
-
-	XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, c->w / 2, c->h / 2);
 }
 
 Client *

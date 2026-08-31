@@ -2,42 +2,40 @@
 #define BARPADDING_PATCH 1
 
 /* appearance */
-static const unsigned int borderpx  = 1;        /* border pixel of windows */
-static const Gap default_gap        = {.isgap = 1, .realgap = 10, .gappx = 10};
-static const unsigned int snap      = 32;       /* snap pixel */
-static const int scalepreview       = 4;        /* preview scaling (display w and h / scalepreview) */
-static const int previewbar         = 1;        /* show the bar in the preview window */
-static const int swallowfloating    = 0;        /* 1 means swallow floating windows by default */
-static const int swterminheritfs    = 1;        /* 1 terminal inherits fullscreen on unswallow, 0 otherwise */
-static const int showbar            = 1;        /* 0 means no bar */
-static const int topbar             = 1;        /* 0 means bottom bar */
-static const unsigned int systraypinning = 0;   /* 0: sloppy systray follows selected monitor, >0: pin systray to monitor X */
-static const unsigned int systrayspacing = 2;   /* systray spacing */
-static const int systraypinningfailfirst = 1;   /* 1: if pinning fails, display systray on the first monitor, False: display systray on the last monitor*/
-static const int showsystray             = 1;   /* 0 means no systray */
-static const int vertpad            = 10;       /* vertical padding of bar */
-static const int sidepad            = 10;       /* horizontal padding of bar */
-static const int horizpadbar        = 2;        /* horizontal padding for statusbar */
-static const int vertpadbar         = 0;        /* vertical padding for statusbar */
-static const int showtab            = 1;        /* 0 means no tabbar */
-static const int alltab             = 0;        /* 0 means no tabbar for all layouts */
-static const int toptab             = 0;        /* 1 means top tab bar */
-static const char *fonts[]          = { "monospace:size=10" };
-static const char dmenufont[]       = "monospace:size=10";
+static const unsigned int borderpx          = 1;        /* border pixel of windows */
+static const Gap default_gap                = {.isgap = 1, .realgap = 10, .gappx = 10};
+static const unsigned int snap              = 32;       /* snap pixel */
+static const int scalepreview               = 8;        /* preview scaling (display w and h / scalepreview) */
+static const int previewbar                 = 0;        /* show the bar in the preview window */
+static const int swallowfloating            = 0;        /* 1 means swallow floating windows by default */
+static const int swterminheritfs            = 1;        /* 1 terminal inherits fullscreen on unswallow, 0 otherwise */
+static const int showbar                    = 1;        /* 0 means no bar */
+static const int topbar                     = 1;        /* 0 means bottom bar */
+static const unsigned int systraypinning    = 3;   /* 0: sloppy systray follows selected monitor, >0: pin systray to monitor X */
+static const unsigned int systrayspacing    = 2;   /* systray spacing */
+static const int systraypinningfailfirst    = 1;   /* 1: if pinning fails, display systray on the first monitor, False: display systray on the last monitor*/
+static const int showsystray                = 1;   /* 0 means no systray */
+static const int vertpad                    = 10;       /* vertical padding of bar */
+static const int sidepad                    = 10;       /* horizontal padding of bar */
+static const int horizpadbar                = 8;        /* horizontal padding for statusbar */
+static const int vertpadbar                 = 8;        /* vertical padding for statusbar */
+static const int showtab                    = 1;        /* 0 means no tabbar */
+static const int alltab                     = 0;        /* 0 means no tabbar for all layouts */
+static const int toptab                     = 0;        /* 1 means top tab bar */
+static const char *fonts[]                  = { "monofur:size=12", "monofur nerd font:style:medium:size=10" };
+static const char dmenufont[]               = "monofur:size=12";
+static const char col_bg[]                  = "#1a1b26";
+static const char col_fg[]                  = "#acb0d0";
+static const char col_sel[]                = "#449dab";
+static const unsigned int baralpha          = 0xd0;
+static const unsigned int borderalpha       = OPAQUE;
 
-
-static const char col_gray1[]       = "#222222";
-static const char col_gray2[]       = "#444444";
-static const char col_gray3[]       = "#bbbbbb";
-static const char col_gray4[]       = "#eeeeee";
-static const char col_cyan[]        = "#005577";
-static const unsigned int baralpha = 0xd0;
-static const unsigned int borderalpha = OPAQUE;
 static const char *colors[][3]      = {
 	/*               fg         bg         border   */
-	[SchemeNorm] = { col_gray3, col_gray1, col_gray2 },
-	[SchemeSel]  = { col_gray4, col_cyan,  col_cyan  },
+	[SchemeNorm] = { col_fg, col_bg, col_bg },
+	[SchemeSel]  = { col_sel, col_bg,  col_bg  },
 };
+
 static const unsigned int alphas[][3]      = {
 	/*               fg      bg        border     */
 	[SchemeNorm] = { OPAQUE, baralpha, borderalpha },
@@ -48,9 +46,9 @@ static const unsigned int alphas[][3]      = {
 #define MAX_TAGNAME_LEN 14		/* excludes TAG_PREPEND */
 #define TAG_PREPEND "%1i:"		/* formatted as 2 chars */
 static char *tagicons[][NUMTAGS] = {
-	[IconsDefault]        = { "1", "2", "3", "4", "5", "6", "7", "8", "9" },
-	[IconsVacant]         = { NULL },
-	[IconsOccupied]       = { NULL },
+	[IconsDefault]        = { "", "", "", "", "", "", "", "", "" },
+	[IconsVacant]         = { "1", "2", "3", "4", "5", "6", "7", "8", "9" },
+	[IconsOccupied]       = { "1", "2", "3", "4", "5", "6", "7", "8", "9" },
 };
 
 static const unsigned int ulinepad		= 5;	/* horizontal padding between the underline and tag */
@@ -59,15 +57,15 @@ static const unsigned int ulinevoffset	= 0;	/* how far above the bottom of the b
 static const int ulineall				= 0;	/* 1 to show underline on all tags, 0 for just the active ones */
 
 static const char *tagsel[][2] = {
-	{ "#ffffff", "#ff0000" },
-	{ "#ffffff", "#ff7f00" },
-	{ "#000000", "#ffff00" },
-	{ "#000000", "#00ff00" },
-	{ "#ffffff", "#0000ff" },
-	{ "#ffffff", "#4b0082" },
-	{ "#ffffff", "#9400d3" },
-	{ "#000000", "#ffffff" },
-	{ "#ffffff", "#000000" },
+	{ col_sel,     col_bg },
+	{ "#ff7a93", col_bg },
+	{ "#bb9af7", col_bg },
+	{ "#b9f27c", col_bg },
+	{ "#e0af68", col_bg },
+	{ "#ff9e64", col_bg },
+	{ "#7aa2f7", col_bg },
+	{ "#0db9d7", col_bg },
+	{ "#ad8ee6", col_bg },
 };
 
 static const unsigned int tagalpha[] = { OPAQUE, baralpha };
@@ -77,11 +75,11 @@ static const Rule rules[] = {
 	 *	WM_CLASS(STRING) = instance, class
 	 *	WM_NAME(STRING) = title
 	 */
-	/* class      instance    title            tags mask  isfloating  isterminal  noswallow  monitor */
-	{ "Gimp",     NULL,       NULL,            0,         1,          0,           0,        -1 },
-	{ "Firefox",  NULL,       NULL,            1 << 8,    0,          0,          -1,        -1 },
-	{ "St",       NULL,       NULL,            0,         0,          1,           0,        -1 },
-	{ NULL,       NULL,       "Event Tester",  0,         0,          0,           1,        -1 }, /* xev */
+	/* class                instance    title            tags mask  isfloating  isterminal  noswallow  monitor */
+    { "mpv",                NULL,       NULL,            0,         0,          0,           -1,        -1 },
+	{ "librewolf",          NULL,       NULL,            1 << 8,    0,          0,           -1,        -1 },
+    { "st-256color",        NULL,       NULL,            0,         0,          1,           0,        -1 },
+	{ NULL,                 NULL,       "Event Tester",  0,         0,          0,           1,        -1 }, /* xev */
 };
 
 /* layout(s) */
@@ -100,7 +98,7 @@ static const Layout layouts[] = {
 };
 
 /* key definitions */
-#define MODKEY Mod1Mask
+#define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG) \
 	{ MODKEY,                       KEY,      view,           {.ui = 1 << TAG} }, \
 	{ MODKEY|ControlMask,           KEY,      toggleview,     {.ui = 1 << TAG} }, \
@@ -108,17 +106,21 @@ static const Layout layouts[] = {
 	{ MODKEY|ControlMask|ShiftMask, KEY,      previewtag,     {.ui = TAG } },     \
 
 /* helper for spawning shell commands in the pre dwm-5.0 fashion */
-#define SHCMD(cmd) { .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
+#define SHCMD(cmd) { .v = (const char*[]){ "/bin/fish", "-c", cmd, NULL } }
 
 #define STATUSBAR "dwmblocks"
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
-static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
+static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_bg, "-nf", col_fg, "-sb", col_sel, "-sf", col_fg, NULL };
 static const char *termcmd[]  = { "st", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
+    { MODKEY|ShiftMask,				XK_s,	   spawn, 	   		SHCMD("maim --select --hidecursor | xclip -selection clipboard -t image/png")},
+	{ MODKEY,						XK_Print,  spawn,	   		SHCMD("maim | xclip -selection clipboard -t image/png")},
+	{ MODKEY|ShiftMask,				XK_Print,  spawn,	   		SHCMD("maim -i $(xdotool getactivewindow) --hidecursor | xclip -selection clipboard -t image/png")},
+	{ MODKEY|ShiftMask, 			XK_f,	   spawn,          SHCMD("pcmanfm ~ -n")},
 	{ MODKEY,                       XK_p,      spawn,          {.v = dmenucmd } },
 	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
 	{ MODKEY,                       XK_b,      togglebar,      {0} },
