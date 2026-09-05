@@ -96,6 +96,9 @@
 #define VERSION_MINOR               0
 #define XEMBED_EMBEDDED_VERSION (VERSION_MAJOR << 16) | VERSION_MINOR
 
+#define MAX_TAGNAME_LEN 13		/* excludes TAG_PREPEND */
+#define TAG_PREPEND "%1i: "		/* formatted as 3 chars */
+
 
 /* enums */
 enum { Manager, Xembed, XembedInfo, XLast }; /* Xembed atoms */
@@ -176,6 +179,7 @@ struct Monitor {
 	int previewshow;
 	Window tagwin;
 	Pixmap *tagmap;
+    char nametags[NUMTAGS][MAX_TAGNAME_LEN]; /* tag names unique to monitor */
 	char ltsymbol[16];
 	float mfact;
 	int nmaster;
@@ -1027,11 +1031,9 @@ drawbar(Monitor *m)
 	}
 
 	/* draw status first so it can be overdrawn by tags later */
-	if (m == selmon) { /* status is only drawn on selected monitor */
-		drw_setscheme(drw, scheme[SchemeNorm]);
-		tw = TEXTW(stext);
-		drw_text(drw, m->ww - sw - 2 * sp - stw,  0, sw, bh, lrpad / 2, stext, 0);
-	}
+    drw_setscheme(drw, scheme[SchemeNorm]);
+    tw = TEXTW(stext);
+    drw_text(drw, m->ww - tw - 2 * sp - stw,  0, sw, bh, lrpad / 2, stext, 0);
 
 	for (c = m->clients; c; c = c->next) {
 		occ |= c->tags;
@@ -1048,10 +1050,6 @@ drawbar(Monitor *m)
 		drw_text(drw, x, 0, w, bh, lrpad / 2, icon, urg & 1 << i);
 		if (ulineall || m->tagset[m->seltags] & 1 << i) /* if there are conflicts, just move these lines directly underneath both 'drw_setscheme' and 'drw_text' :) */
 			drw_rect(drw, x + ulinepad, bh - ulinestroke - ulinevoffset, (ulinepad * 2) > w ? 0 : w - (ulinepad * 2), ulinestroke, 1, 0);
-		// if (occ & 1 << i)
-		// 	drw_rect(drw, x + boxs, boxs, boxw, boxw,
-		// 		m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
-		// 		urg & 1 << i);
 		x += w;
 	}
 	w = TEXTW(m->ltsymbol);
@@ -1660,9 +1658,15 @@ monocle(Monitor *m)
 		if (ISVISIBLE(c))
 			n++;
 	if (n > 0) /* override layout symbol */
-		snprintf(m->ltsymbol, sizeof m->ltsymbol, "[%d]", n);
+		snprintf(m->ltsymbol, sizeof m->ltsymbol, "%s: %d", m->lt[m->sellt]->symbol, n);
 	for (c = nexttiled(m->clients); c; c = nexttiled(c->next))
-		resize(c, m->wx + m->gap->gappx, m->wy + m->gap->gappx, m->ww - 2 * c->bw - m->gap->gappx * 2, m->wh - 2 * c->bw - m->gap->gappx * 2, 0); 
+        if (c == m->sel) {
+            resize(c, m->wx + m->gap->gappx, m->wy + m->gap->gappx, m->ww - 2 * c->bw - m->gap->gappx * 2, m->wh - 2 * c->bw - m->gap->gappx * 2, 0); 
+        } else {
+            int offx = WIDTH(c) * -2;
+            XMoveWindow(dpy, c->win, WIDTH(c) * -2, c->y);
+            c->x = offx;
+        }
 }
 
 void
@@ -1780,9 +1784,7 @@ void
 nametag(const Arg *arg) {
 	char *p, name[MAX_TAGNAME_LEN];
 	FILE *f;
-	int i, j;
-
-    static char new_tags[IconsLast][NUMTAGS][MAX_TAGNAME_LEN] = {0};
+	int i;
 
 	errno = 0; // popen(3p) says on failure it "may" set errno
 	if(!(f = popen("dmenu < /dev/null", "r"))) {
@@ -1800,11 +1802,10 @@ nametag(const Arg *arg) {
 
 	for(i = 0; i < NUMTAGS; i++) {
         if(selmon->tagset[selmon->seltags] & (1 << i)) {
-            for(j = 0; j < IconsLast; j++) {
-                if (tagicons[j][0] != NULL) { 
-                    snprintf(new_tags[j][i], MAX_TAGNAME_LEN, TAG_PREPEND "%.*s", i+1, (int)(MAX_TAGNAME_LEN - 4), name);
-                    tagicons[j][i] = new_tags[j][i];
-                }
+            if (name[0] == '\0') {
+                selmon->nametags[i][0] = '\0';
+            } else {
+                snprintf(selmon->nametags[i], MAX_TAGNAME_LEN, TAG_PREPEND "%.*s", i+1, (int)(MAX_TAGNAME_LEN - 4), name);
             }
         }
     }
@@ -2104,8 +2105,10 @@ restack(Monitor *m)
 			}
 	}
 	XSync(dpy, False);
-	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev))
-    ;
+	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
+
+    if (m->lt[m->sellt]->arrange == monocle)
+        arrangemon(m);
 }
 
 void
@@ -2670,6 +2673,10 @@ tagicon(Monitor *m, int tag)
 {
 	Client *c;
 	char *icon;
+
+    if (m->nametags[tag][0] != '\0')
+        return m->nametags[tag];
+
 	for (c = m->clients; c && (!(c->tags & 1 << tag)); c = c->next);
 	// for (c = m->clients; c && (!(c->tags & 1 << tag) || HIDDEN(c)); c = c->next); // awesomebar / wintitleactions compatibility
 	if (c && tagicons[IconsOccupied][0] != NULL)
@@ -2725,7 +2732,23 @@ togglebar(const Arg *arg)
 	selmon->showbar = selmon->pertag->showbars[selmon->pertag->curtag] = !selmon->showbar;
 	updatebarpos(selmon);
 	XMoveResizeWindow(dpy, selmon->barwin, selmon->wx + sp, selmon->by + vp, selmon->ww - 2 * sp, bh);
+
+    if (showsystray) {
+        XWindowChanges wc;
+        if (!selmon->showbar)
+            wc.y = -bh;
+        else {
+            wc.y = 0;
+            if (!selmon->topbar)
+                wc.y = selmon->mh - bh;
+        }
+        XConfigureWindow(dpy, systray->win, CWY, &wc);
+    }
+
 	arrange(selmon);
+
+    if (showsystray)
+        updatesystray(0);
 }
 
  void
@@ -3159,7 +3182,7 @@ updatestatus(void)
 {
 	if (!gettextprop(root, XA_WM_NAME, stext, sizeof(stext)))
 		strcpy(stext, "dwm-"VERSION);
-	drawbar(selmon);
+	drawbars();
 }
 
 void
@@ -3305,7 +3328,11 @@ updatetitle(Client *c)
 		strcpy(title, broken);
 
     if (XGetClassHint(dpy, c->win, &ch) && ch.res_class) {
-        snprintf(c->name, sizeof c->name, "%s: %s", ch.res_class, title);
+        if (strcasestr(title, ch.res_class) != NULL || (ch.res_name && strcasestr(title, ch.res_name) != NULL)) {
+            strncpy(c->name, title, sizeof c->name);
+        } else {
+            snprintf(c->name, sizeof c->name, "%s: %s", ch.res_class, title);
+        }
     } else {
 		strncpy(c->name, title, sizeof c->name);
 	}
